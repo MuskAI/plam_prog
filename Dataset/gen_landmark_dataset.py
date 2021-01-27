@@ -12,10 +12,14 @@ from PIL import Image
 import hashlib
 import matplotlib.pyplot as plt
 import traceback
+import sys,time
+import re
+import rich
 
 class LandMarkData:
     def __init__(self):
         self.save_path = 'H:/手掌关键点定位/after_resize'
+        self.finish_path = 'H:/手掌关键点定位/after_resize'
         self.error_list = []
         # self.multi_landmark_path = self.multi_batch()
         # image_and_landmark = []
@@ -207,6 +211,26 @@ class LandMarkData:
                 self.error_list.append(os.path.join(image_dir, item))
 
 
+    def read_and_check(self):
+        """
+        读取处理好的图片，并且检查gt
+        :return:
+        """
+        error_list = []
+        # 0 read img
+        if not os.path.exists(self.finish_path):
+            traceback.print_exc('The input path error')
+
+        for idx, item in enumerate(os.listdir(self.finish_path)):
+
+            parse_result = self.parse_image_name(item)
+            if parse_result == False:
+                error_list.append(item)
+            # if item.split('.')[0] == '20500-男-20-右;127,174-168,121-151,111-148,110-129,101-124,100-105,98-96,98-72,100-49,123-31,142-59,166-':
+            src = Image.open(os.path.join(self.finish_path, item))
+            self.visualize(src,landmark=parse_result['landmark'])
+            # time.sleep(1)
+
 
 
 
@@ -242,5 +266,30 @@ class LandMarkData:
         :return:
         """
 
+
+    def parse_image_name(self, name):
+        """
+        解析图片的名称
+        :param name:图片的名称
+        :return:
+        """
+        name_name = name.split(';')[0]
+        _ = name.split(';')[-1]
+        name_format = _.split('-')[-1]
+        landmark_list = _.split('-')[:-1]
+
+        for idx, i in enumerate(landmark_list):
+            landmark_list[idx] = (int(i.split(',')[0]), int(i.split(',')[1]))
+
+        # 判断名称是否有问题
+        if len(landmark_list) != 12:
+            return False
+        else:
+            return {'name': name_name,
+                    'landmark': landmark_list,
+                    'format': name_format}
+
+
+
 if __name__ == '__main__':
-    LandMarkData().multi_batch()
+    LandMarkData().read_and_check()
