@@ -12,14 +12,15 @@ from PIL import Image
 import hashlib
 import matplotlib.pyplot as plt
 import traceback
-import sys,time
+import sys, time
 import re
 import rich
 
+
 class LandMarkData:
     def __init__(self):
-        self.save_path = 'H:/手掌关键点定位/after_resize'
-        self.finish_path = 'H:/手掌关键点定位/after_resize'
+        self.save_path = 'H:/手掌关键点定位/after_resize2'
+        self.finish_path = 'H:/手掌关键点定位/after_resize2'
         self.error_list = []
         # self.multi_landmark_path = self.multi_batch()
         # image_and_landmark = []
@@ -38,15 +39,14 @@ class LandMarkData:
             print('In multi_batch process: %d / 9' % (i))
             multi_landmark_path.append('./landmark_gt/第%d批check.csv' % (i))
             multi_image_path.append('H:/手掌关键点定位/第二大批原始数据/第%d批' % (i))
-            _image_and_landmark_list = self.read_csv(multi_landmark_path[i-1])
-            _image_dir = multi_image_path[i-1]
+            _image_and_landmark_list = self.read_csv(multi_landmark_path[i - 1])
+            _image_dir = multi_image_path[i - 1]
             self.deal_with_all_image(_image_and_landmark_list, image_dir=_image_dir)
 
         print('The number of error image is : %d' % (len(self.error_list)))
         print(self.error_list)
 
-
-    def deal_with_one_image(self, image_and_landmark_dict=None, image_dir=r'H:\手掌关键点定位\第二大批原始数据\第1批', size=192):
+    def deal_with_one_image(self, image_and_landmark_dict=None, image_dir=None, size=192):
         """
         :param image_and_landmark_dict: 输入的是一个字典，只包含单张图片
         :param image_dir:输入的是图片所在的根目录，因为字典中只包含图片的名称
@@ -56,7 +56,7 @@ class LandMarkData:
         try:
             # print(os.path.join(image_dir, image_and_landmark_dict['img_name']))
             src = Image.open(os.path.join(image_dir, image_and_landmark_dict['img_name']))
-            if len(src.split()) ==3:
+            if len(src.split()) == 3:
                 pass
             elif len(src.split()) == 4:
                 # convert
@@ -68,54 +68,57 @@ class LandMarkData:
             print(e)
             return False
 
-
         # 检查gt
         # self.visualize(src, image_and_landmark_dict['landmark'])
+        crop_result = self.palm_crop(image_and_landmark_dict['landmark'])
 
-        resize_landmark = self.point_map(landmark=image_and_landmark_dict['landmark'], src_size=src.size,
-                                         src_resize_size=(size,size))
+        palm_center_img, crop_landmark = self.crop_img(img=src,max_point=crop_result,
+                                                      landmark = image_and_landmark_dict['landmark'],pad=100)
 
-        # self.landmark_after_resize(src, landmark=image_and_landmark_dict['landmark'], size=size)
+        # self.visualize(palm_center_img, crop_landmark)
+        resize_landmark = self.point_map(landmark=crop_landmark, src_size=palm_center_img.size,
+                                         src_resize_size=(size, size))
+        palm_center_img_192 = palm_center_img.resize((size, size))
+        # self.visualize(palm_center_img_192, resize_landmark)
+        # self.draw_bbox(src_192, resize_landmark)
+
         # resize to 192
-        src_192 = src.resize((size, size))
+        # src_192 = src.resize((size, size))
         # self.visualize(src_192, resize_landmark)
         try:
-            self.save_src_and_gt(src_192=src_192, landmark=resize_landmark, img_name=image_and_landmark_dict['img_name'])
+            self.save_src_and_gt(src_192=palm_center_img_192, landmark=resize_landmark,
+                                 img_name=image_and_landmark_dict['img_name'])
+            pass
         except Exception as e:
             print(e)
             return False
         return True
-    # def landmark_after_resize(self, src, landmark, size):
-    #     """
-    #     获取resize后的坐标,
-    #     :param src: 没有resize的原图 ，PIL Image
-    #     :param landmark: 包含12个元组
-    #     :return:
-    #     """
-    #
-    #     # 缩小后的gt
-    #     zeros = np.zeros_like(np.array(src.split()[0]))
-    #     x, y = self.unzip(landmark)
-    #
-    #     # 把坐标点放在图中
-    #     for i in range(12):
-    #         zeros[x[i], y[i]] = 255
-    #
-    #     src_192 = src.resize((size, size))
-    #     src_192 = np.array(src_192, dtype='uint8')
-    #     # plt.imshow(src_192)
-    #     # plt.show()
-    #
-    #     zeros_IMAGE = Image.fromarray(np.array(zeros, dtype='uint8'))
-    #     zeros_IMAGE = zeros_IMAGE.resize((size, size))
-    #     zeros_numpy = np.array(zeros_IMAGE)
-    #     print('the max is %f' % (zeros_numpy.all()))
-    #     # plt.imshow(zeros_numpy)
-    #     # plt.show()
-    #
-    #     self.visualize(src_192, landmark=self.point_map(src_size=src.size, src_resize_size=(192, 192), landmark=landmark))
-    #     print()
-    #
+    def crop_img(self, img, max_point, landmark, pad=20):
+        """
+        :param img: PIL IMAGE
+        :param pad:
+        :return:
+        """
+        img = np.array(img)
+        top = max_point['max_top'] - pad if max_point['max_top'] - pad >=0 else 0
+        botton = max_point['max_botton'] + pad if max_point['max_botton'] + pad >= 0 else img.size[0]
+        left = max_point['max_left'] - pad if max_point['max_left'] - pad >= 0 else 0
+        right = max_point['max_right'] + pad if max_point['max_right'] + pad >= 0 else img.size[1]
+        top_gap = top
+        print(img.shape)
+        botton_gap = img.shape[0] - botton
+        left_gap = left
+        right_gap = img.shape[1] - right
+
+        # correct landmark
+        for idx, item in enumerate(landmark):
+            landmark[idx] = (int(item[0]) - top_gap,int(item[1]) - left_gap)
+
+
+        img = img[top:botton,left:right,:]
+        img = np.array(img,dtype='uint8')
+        img = Image.fromarray(img)
+        return img,landmark
 
     def point_map(self, landmark, src_size, src_resize_size):
         """
@@ -130,10 +133,11 @@ class LandMarkData:
         # 开始计算缩小后的坐标点的位置
         x, y = self.unzip(landmark=landmark)
         for i in range(12):
-            x[i] = int(x[i] / col_rate)
-            y[i] = int(y[i] / row_rate)
+            x[i] = round(x[i] / col_rate,2)
+            y[i] = round(y[i] / row_rate,2)
 
         return list(zip(x, y))
+
     def read_csv(self, landmark_path):
         """
         读取CSV文件，转化为易于处理的字典形式:
@@ -153,8 +157,15 @@ class LandMarkData:
         name_index = [i * 13 for i in range(int(df.shape[0] / 13))]
         image_and_landmark = []
         for idx, item in enumerate(name_index):
-            x = list(df.loc[[item+1, item+2, item+3, item+4, item+5, item+6, item+7, item+8, item+9, item+10, item+11, item+12]][0])
-            y = list(df.loc[[item+1, item+2, item+3, item+4, item+5, item+6, item+7, item+8, item+9, item+10, item+11, item+12]][1])
+            x = list(df.loc[[item + 1, item + 2, item + 3, item + 4, item + 5, item + 6, item + 7, item + 8, item + 9,
+                             item + 10, item + 11, item + 12]][0])
+            y = list(df.loc[[item + 1, item + 2, item + 3, item + 4, item + 5, item + 6, item + 7, item + 8, item + 9,
+                             item + 10, item + 11, item + 12]][1])
+            # for idx,item in enumerate(x):
+            #     x[idx] = int(item)
+            # for idx, item in enumerate(y):
+            #     y[idx] = int(item)
+
             loc = list(zip(x, y))
 
             img_landmark_dict = {'img_name': str(df.loc[item][0]),
@@ -180,15 +191,56 @@ class LandMarkData:
         name_format = img_name.split('.')[-1]
         name_landmark = ''
         for item in landmark:
-            name_landmark += '%d,%d-' % (item[0],item[1])
+            name_landmark += '%.2f,%.2f-' % (item[0], item[1])
 
-        save_name = name_name + ';' + name_landmark + '.' +name_format
+        save_name = name_name + ';' + name_landmark + '.' + name_format
         print(save_name)
         try:
-            src_192.save(os.path.join(self.save_path,save_name))
+            src_192.save(os.path.join(self.save_path, save_name))
         except Exception as e:
             print(e, 'the image :%s error' % save_name)
 
+    def palm_crop(self, landmark, pad=10):
+        """
+        通过最值点crop确定框的大小
+        :return:
+
+        """
+        max_top, max_botton, max_left, max_right = 9999, -1, 9999, -1
+        for idx, item in enumerate(landmark):
+            if int(item[0]) > max_botton:
+                max_botton = int(item[0])
+            elif int(item[0]) < max_top:
+                max_top = int(item[0])
+            else:
+                pass
+
+            if int(item[1]) > max_right:
+                max_right = int(item[1])
+            elif int(item[1]) < max_left:
+                max_left = int(item[1])
+            else:
+                pass
+        return {'max_top':max_top,
+                'max_botton':max_botton,
+                'max_left':max_left,
+                'max_right':max_right}
+
+    def draw_bbox(self, img, max_point):
+        """
+
+        :param img: PIL IMAGE
+        :param max_point:
+        :return:
+        """
+        print(max_point)
+        img = np.array(img,dtype='uint8')
+        plt.imshow(img)
+        plt.gca().add_patch(plt.Rectangle(xy=(int(max_point['max_left']), int(max_point['max_top'])),
+                                          width=max_point['max_right'] - max_point['max_left'],
+                                          height=max_point['max_botton'] - max_point['max_top'],
+                                          fill=False, linewidth=2))
+        plt.show()
 
     def deal_with_all_image(self, image_and_landmark_list=None, image_dir=None):
         """
@@ -210,7 +262,6 @@ class LandMarkData:
             else:
                 self.error_list.append(os.path.join(image_dir, item))
 
-
     def read_and_check(self):
         """
         读取处理好的图片，并且检查gt
@@ -223,16 +274,17 @@ class LandMarkData:
 
         for idx, item in enumerate(os.listdir(self.finish_path)):
 
-            parse_result = self.parse_image_name(item)
+            try:
+                parse_result = self.parse_image_name(item)
+            except:
+                print(item)
             if parse_result == False:
                 error_list.append(item)
             # if item.split('.')[0] == '20500-男-20-右;127,174-168,121-151,111-148,110-129,101-124,100-105,98-96,98-72,100-49,123-31,142-59,166-':
             src = Image.open(os.path.join(self.finish_path, item))
-            self.visualize(src,landmark=parse_result['landmark'])
+            # print(parse_result['landmark'])
+            # self.visualize(src, landmark=parse_result['landmark'])
             # time.sleep(1)
-
-
-
 
     def visualize(self, img, landmark):
         """
@@ -266,7 +318,6 @@ class LandMarkData:
         :return:
         """
 
-
     def parse_image_name(self, name):
         """
         解析图片的名称
@@ -279,7 +330,7 @@ class LandMarkData:
         landmark_list = _.split('-')[:-1]
 
         for idx, i in enumerate(landmark_list):
-            landmark_list[idx] = (int(i.split(',')[0]), int(i.split(',')[1]))
+            landmark_list[idx] = (float(i.split(',')[0]), float(i.split(',')[1]))
 
         # 判断名称是否有问题
         if len(landmark_list) != 12:
@@ -288,7 +339,6 @@ class LandMarkData:
             return {'name': name_name,
                     'landmark': landmark_list,
                     'format': name_format}
-
 
 
 if __name__ == '__main__':
