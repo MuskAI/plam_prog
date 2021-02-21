@@ -12,15 +12,15 @@ from PIL import Image
 import hashlib
 import matplotlib.pyplot as plt
 import traceback
+from time import sleep
+from tqdm import tqdm
 import sys, time
 import re
-import rich
-
 
 class LandMarkData:
     def __init__(self):
         self.save_path = 'H:/手掌关键点定位/after_resize2'
-        self.finish_path = 'H:/手掌关键点定位/after_resize2'
+        self.finish_path = r'C:\Users\musk\Desktop\argument_data'
         self.error_list = []
         # self.multi_landmark_path = self.multi_batch()
         # image_and_landmark = []
@@ -272,19 +272,23 @@ class LandMarkData:
         if not os.path.exists(self.finish_path):
             traceback.print_exc('The input path error')
 
-        for idx, item in enumerate(os.listdir(self.finish_path)):
+        for idx, item in enumerate(tqdm(os.listdir(self.finish_path))):
 
             try:
                 parse_result = self.parse_image_name(item)
+                src = Image.open(os.path.join(self.finish_path, item))
             except:
-                print(item)
+                # print(item)
+                os.remove(os.path.join(self.finish_path, item))
             if parse_result == False:
                 error_list.append(item)
             # if item.split('.')[0] == '20500-男-20-右;127,174-168,121-151,111-148,110-129,101-124,100-105,98-96,98-72,100-49,123-31,142-59,166-':
-            src = Image.open(os.path.join(self.finish_path, item))
+
+
             # print(parse_result['landmark'])
             # self.visualize(src, landmark=parse_result['landmark'])
             # time.sleep(1)
+        print(error_list)
 
     def visualize(self, img, landmark):
         """

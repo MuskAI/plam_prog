@@ -21,7 +21,5 @@ class MyResize:
     def read_gt(self):
         pass
 
-
-    def resize_src_and_gt_check(self):
 if __name__ == '__main__':
     MyResize()

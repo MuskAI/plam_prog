@@ -6,12 +6,13 @@ import hashlib
 import os, sys
 import numpy as np
 from PIL import Image
+from tqdm import tqdm
 import pandas as pd
 import traceback
 from multiprocessing import Pool
 from rich.progress import track
 import base64
-from numba import jit
+import time
 
 
 class GenLandmarkCode:
@@ -162,7 +163,11 @@ class GenClsDataset():
     """
 
     def __init__(self):
+
         self.df = pd.read_csv('cls_md5.csv')
+        self.aligned_dir = r'H:\after_correction'
+        self.error_list = []
+        self.full_label_for_img()
         pass
 
     def read_csv(self, csv_path):
@@ -196,17 +201,24 @@ class GenClsDataset():
         df = pd.DataFrame(data)
         df.to_csv('landmark_md5_cls.csv')
     def search_same(self, target_code):
-        df = self.df
-        find_name = []
-        length = df.shape[0]
-        cls_list = []
-        for idx,row in df.iterrows():
 
-            name = row[1]
-            search_code = row[2]
-            if search_code == target_code:
-                find_name.append(name)
-                cls_list.append(str((name.split('_')[1], name.split('_')[2])))
+        df = self.df
+        cls_list = []
+
+        result = df.loc[df['ImgMD5']==target_code]
+
+        find_name=list(result['ImgName'])
+        for name in find_name:
+            cls_list.append(str((name.split('_')[1], name.split('_')[2])))
+        #
+        # for idx,row in df.iterrows():
+        #
+        #     name = row[1]
+        #     search_code = row[2]
+        #     if search_code == target_code:
+        #         find_name.append(name)
+        #         cls_list.append(str((name.split('_')[1], name.split('_')[2])))
+
         if len(find_name) == 0:
             return '', ''
         else:
@@ -224,9 +236,60 @@ class GenClsDataset():
             landmark_out.append(int(landmark[2 * i + 1]))
         return landmark_out
 
+    def full_label_for_img(self):
+        """
+        拿到gyq给的矫正后的图片，为每个图片补充标签信息
+        1. 遍历每一张图片，parse每一张图片的name
+        2. 根据每一张图片唯一的name，读取cls_md5.csv 获取md5 code
+        3. 根据获取的md5 code 去search 相同label的图片
+        :return:
+        """
+        name_list = []
+        code_list = []
+        landmark_list = []
+        same_name_list = []
+        cls_list=[]
+        df = self.df
+        aligned_img_list = os.listdir(self.aligned_dir)
+        for idx, item in enumerate(tqdm(aligned_img_list)):
+            start = time.time()
+
+            end1 = time.time()
+            try:
+                name = item.split(';')[0]
+                format = item.split('.')[-1]
+                name = name + '.' + format
+
+                # TODO 查找name对应的md5
+                # print(name)
+                search_result = df.loc[df['ImgName'] == name]
+                code = list(search_result['ImgMD5'])[0]
+                end2 = time.time()
+                same_name, cls = self.search_same(target_code=code)
+                # print(same_name)
+
+                name_list.append(name)
+                code_list.append(code)
+                same_name_list.append(same_name)
+                cls_list.append(cls)
+                end3 = time.time()
+
+
+            except Exception as e:
+                self.error_list.append(name)
+        data = {'ImgName': name_list, 'ImgMD5': code_list,
+                'same_name':same_name_list,'cls':cls_list}
+
+        df = pd.DataFrame(data)
+        df.to_csv('0214_aligned_cls_all.csv')
+        print(print("\033[4;31;43mThe Error list is :\033[0m"))
+        print(len(self.error_list))
+        print(self.error_list)
+
 
 if __name__ == '__main__':
 
-    GenClsDataset().read_csv('landmark_md5.csv')
+
+    GenClsDataset()
     # GenLandmarkCode().multi_batch()
-    # GenClsCode().cl   ass_encode()
+    # GenClsCode().class_encode()
