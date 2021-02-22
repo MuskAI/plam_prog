@@ -106,6 +106,7 @@ class LandMarkData:
         right = max_point['max_right'] + pad if max_point['max_right'] + pad >= 0 else img.size[1]
         top_gap = top
         print(img.shape)
+        #
         botton_gap = img.shape[0] - botton
         left_gap = left
         right_gap = img.shape[1] - right
